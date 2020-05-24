@@ -14,7 +14,7 @@ object Uploader {
     /**
      * This is the hostname that'll be send as the destination link
      */
-    const val HOSTNAME = "localhost"
+    const val HOSTNAME = "rzx.wtf"
 
     /**
      * I wouldn't recommend to run this on port 80 as default web-server so you can set a port here
@@ -42,28 +42,36 @@ object Uploader {
         // Listen for uploads
         app.post("/upload") { ctx ->
             val file = ctx.uploadedFile("image")
-            if (file != null) {
+            val identity = ctx.queryParam("identity")
 
-                // encrypting image with aes
-                val secretKey = KeyGenerator.getInstance("AES").generateKey()
-                val encodedKey = Base64.getEncoder().encodeToString(secretKey.encoded).replace("=", "")
-                val cipher = Cipher.getInstance("AES")
-                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-                val bytes = cipher.doFinal(file.content.readBytes())
+            println(identity + " " + isIdentityValid(identity))
 
-                // generating random filename
-                val randomBytes = ByteArray(16)
-                random.nextBytes(randomBytes)
-                val fileName = Base64.getUrlEncoder().encodeToString(randomBytes).replace("=", "")
+            if (!isIdentityValid(identity)) {
+                ctx.status(401)
+                ctx.result("Invalid identity")
+            } else {
+                if (file != null) {
+                    // encrypting image with aes
+                    val secretKey = KeyGenerator.getInstance("AES").generateKey()
+                    val encodedKey = Base64.getEncoder().encodeToString(secretKey.encoded).replace("=", "")
+                    val cipher = Cipher.getInstance("AES")
+                    cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                    val bytes = cipher.doFinal(file.content.readBytes())
 
-                // writing the file
-                val writeFile = File(fileFolder, "$fileName")
-                writeFile.writeBytes(bytes)
+                    // generating random filename
+                    val randomBytes = ByteArray(16)
+                    random.nextBytes(randomBytes)
+                    val fileName = Base64.getUrlEncoder().encodeToString(randomBytes).replace("=", "")
 
-                // send response
-                ctx.status(200)
-                ctx.result("{ \"status\":200, \"data\": {\"link\": \"http://$HOSTNAME:$PORT/image/$fileName/$encodedKey\"} }")
-                    .contentType("application/json")
+                    // writing the file
+                    val writeFile = File(fileFolder, "$fileName")
+                    writeFile.writeBytes(bytes)
+
+                    // send response
+                    ctx.status(200)
+                    ctx.result("{ \"status\":200, \"data\": {\"link\": \"http://$HOSTNAME:$PORT/image/$fileName/$encodedKey\"} }")
+                        .contentType("application/json")
+                }
             }
         }
 
@@ -95,4 +103,19 @@ object Uploader {
         }
     }
 
+    /**
+     * Since this is a little project this method just will read a txt file and search for the identity
+     * If you want you can rewrite this and create a database
+     */
+    private fun isIdentityValid(identity: String?): Boolean {
+        val file = File("identities.txt")
+
+        for(line in file.readLines()) {
+            if(line == identity) {
+                return true
+            }
+        }
+
+        return false
+    }
 }
